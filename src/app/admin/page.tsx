@@ -13,10 +13,11 @@ import {
   BarChart3,
   Zap,
   Filter,
-  Search
+  Search,
+  User
 } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { getAllTasks, Task } from "@/lib/firestore";
+import { getAllTasks, Task, getUserById, User as FirestoreUser } from "@/lib/firestore";
 import { RoleGuard } from "@/components/RoleGuard";
 import Navbar from "@/components/Navbar";
 
@@ -28,6 +29,7 @@ export default function AdminDashboard() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [clientInfo, setClientInfo] = useState<Record<string, FirestoreUser>>({});
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -35,20 +37,37 @@ export default function AdminDashboard() {
       return;
     }
 
-    const fetchTasks = async () => {
-      if (user) {
-        setLoading(true);
-        try {
-          const allTasks = await getAllTasks();
-          setTasks(allTasks);
-        } catch (err) {
-          console.error("Error fetching tasks:", err);
-          setError("Failed to load tasks.");
-        } finally {
-          setLoading(false);
+  const fetchTasks = async () => {
+    if (user) {
+      setLoading(true);
+      try {
+        const allTasks = await getAllTasks();
+        setTasks(allTasks);
+        
+        // Fetch client information for each task
+        const clientInfoMap: Record<string, FirestoreUser> = {};
+        const uniqueUserIds = [...new Set(allTasks.map(task => task.userId))];
+        
+        for (const userId of uniqueUserIds) {
+          try {
+            const user = await getUserById(userId);
+            if (user) {
+              clientInfoMap[userId] = user;
+            }
+          } catch (err) {
+            console.error(`Error fetching user ${userId}:`, err);
+          }
         }
+        
+        setClientInfo(clientInfoMap);
+      } catch (err) {
+        console.error("Error fetching tasks:", err);
+        setError("Failed to load tasks.");
+      } finally {
+        setLoading(false);
       }
-    };
+    }
+  };
 
     fetchTasks();
   }, [user, authLoading, router]);
@@ -87,14 +106,20 @@ export default function AdminDashboard() {
     switch (type) {
       case 'STATIC_DESIGN':
         return 'Static Design';
-      case 'VIDEO':
-        return 'Video';
+      case 'VIDEO_PRODUCTION':
+        return 'Video Production';
       case 'ANIMATION':
         return 'Animation';
       case 'ILLUSTRATION':
         return 'Illustration';
+      case 'BRANDING':
+        return 'Branding';
+      case 'WEB_DESIGN':
+        return 'Web Design';
+      case 'OTHER':
+        return 'Other';
       default:
-        return type;
+        return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
   };
 
@@ -379,6 +404,12 @@ export default function AdminDashboard() {
                       <p style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '8px', lineHeight: '1.5' }}>
                         {task.description.length > 150 ? `${task.description.substring(0, 150)}...` : task.description}
                       </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <User size={14} color="var(--text-light)" />
+                        <span style={{ fontSize: '12px', color: 'var(--text-light)', fontWeight: '500' }}>
+                          Client: {clientInfo[task.userId]?.name || 'Unknown'}
+                        </span>
+                      </div>
                       <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-light)' }}>
                         <span><strong>Type:</strong> {formatTaskType(task.type)}</span>
                         <span><strong>Priority:</strong> {task.priority}</span>

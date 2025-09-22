@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { PlusCircle, Calendar, Clock, AlertCircle, CheckCircle, BarChart3, Users, Zap, Sparkles } from "lucide-react";
+import { PlusCircle, Clock, AlertCircle, CheckCircle, BarChart3, Users, Zap, Sparkles } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { getTasksByUserId, createBrand, getBrandByUserId, Task } from "@/lib/firestore";
 import Navbar from "@/components/Navbar";
@@ -123,8 +123,8 @@ export default function DashboardPage() {
     switch (type) {
       case 'STATIC_DESIGN':
         return 'Static Design';
-      case 'VIDEO_EDITING':
-        return 'Video Editing';
+      case 'VIDEO_PRODUCTION':
+        return 'Video Production';
       case 'ANIMATION':
         return 'Animation';
       case 'ILLUSTRATION':
@@ -136,7 +136,7 @@ export default function DashboardPage() {
       case 'OTHER':
         return 'Other';
       default:
-        return type;
+        return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
   };
 

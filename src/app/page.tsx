@@ -29,9 +29,9 @@ export default function HomePage() {
               The platform that makes creative collaboration effortless.
             </p>
             <div className="hero-buttons">
-              <Link href="/auth/signup" className="btn-primary btn-lg">
+              <Link href="/auth/signup" className="btn-primary btn-lg" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                 Start Creating
-                <ArrowRight size={20} />
+                <ArrowRight size={20} style={{ marginLeft: '4px' }} />
               </Link>
               <Link href="#features" className="btn-outline btn-lg">
                 Learn More
@@ -148,7 +148,7 @@ export default function HomePage() {
               }}
             >
               Start Your Project
-              <ArrowRight size={20} />
+              <ArrowRight size={20} style={{ marginLeft: '4px' }} />
             </Link>
             <Link
               href="/auth/signin"
@@ -192,7 +192,7 @@ export default function HomePage() {
             The creative platform that connects brands with top talent for stunning results.
           </p>
           <p style={{ color: '#6b7280' }}>
-            © 2024 BlinkWorks. All rights reserved.
+            © {new Date().getFullYear()} BlinkWorks. All rights reserved.
           </p>
         </div>
       </footer>

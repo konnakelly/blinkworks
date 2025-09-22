@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Calendar, Clock, AlertCircle, CheckCircle, Sparkles, FileText, Settings, Eye, Image, Video, File, X, Edit, Trash2 } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { getTaskById, Task, deleteTask } from "@/lib/firestore";
+import { getTaskById, Task, deleteTask, reviewDesignerDelivery } from "@/lib/firestore";
 
 export default function TaskDetailPage() {
   const { user, loading: authLoading } = useAuthContext();
@@ -16,6 +16,8 @@ export default function TaskDetailPage() {
   const [error, setError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [reviewFeedback, setReviewFeedback] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -67,12 +69,41 @@ export default function TaskDetailPage() {
     router.push(`/dashboard/tasks/${task.id}/edit`);
   };
 
+  const handleReviewDelivery = async (status: 'APPROVED' | 'REJECTED' | 'REVISION_REQUESTED') => {
+    if (!task || !user) return;
+    
+    // Require feedback for rejection and revision requests
+    if ((status === 'REJECTED' || status === 'REVISION_REQUESTED') && !reviewFeedback.trim()) {
+      alert('Please provide feedback when rejecting or requesting revisions.');
+      return;
+    }
+    
+    setIsSubmittingReview(true);
+    try {
+      await reviewDesignerDelivery(task.id, status, reviewFeedback, user.uid, true);
+      
+      // Refresh task data
+      const updatedTask = await getTaskById(task.id);
+      if (updatedTask) {
+        setTask(updatedTask);
+      }
+      
+      setReviewFeedback("");
+      alert(`Delivery ${status.toLowerCase()} successfully!`);
+    } catch (err) {
+      console.error("Error reviewing delivery:", err);
+      alert("Failed to submit review. Please try again.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
   const formatTaskType = (type: string) => {
     switch (type) {
       case 'STATIC_DESIGN':
         return 'Static Design';
-      case 'VIDEO_EDITING':
-        return 'Video Editing';
+      case 'VIDEO_PRODUCTION':
+        return 'Video Production';
       case 'ANIMATION':
         return 'Animation';
       case 'ILLUSTRATION':
@@ -84,7 +115,7 @@ export default function TaskDetailPage() {
       case 'OTHER':
         return 'Other';
       default:
-        return type;
+        return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
   };
 
@@ -306,64 +337,90 @@ export default function TaskDetailPage() {
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center', 
-            gap: '8px', 
+            gap: '4px', 
             marginBottom: '16px', 
-            flexWrap: 'wrap'
+            flexWrap: 'nowrap',
+            overflowX: 'auto',
+            padding: '0 16px'
           }}>
-            {['SUBMITTED', 'UNDER_REVIEW', 'DESIGNING', 'COMPLETED'].map((status, index) => {
-              const isActive = task.status === status;
-              const isCompleted = ['SUBMITTED', 'UNDER_REVIEW', 'DESIGNING', 'COMPLETED'].indexOf(task.status) > index;
-              const isCurrent = task.status === status;
+            {(() => {
+              // Check if there are designer deliverables waiting for client review
+              const hasDeliverablesForReview = task.designerDeliveries && 
+                (task.designerDeliveries.files.length > 0 || task.designerDeliveries.links.length > 0) &&
+                task.designerDeliveries.status === 'SUBMITTED';
+              
+              
+              // Determine current display status based on task status and deliverables
+              let currentDisplayStatus: string = task.status;
+              if (hasDeliverablesForReview) {
+                currentDisplayStatus = 'YOUR_REVIEW';
+              }
+              
+              return ['SUBMITTED', 'IN_REVIEW', 'IN_PROGRESS', 'YOUR_REVIEW', 'COMPLETED'].map((displayStatus, index) => {
+              
+              const isActive = currentDisplayStatus === displayStatus;
+              // When at YOUR_REVIEW, the first three steps (SUBMITTED, IN_REVIEW, IN_PROGRESS) should be completed
+              const isCompleted = hasDeliverablesForReview 
+                ? index < 3  // First three steps are completed when at YOUR_REVIEW
+                : ['SUBMITTED', 'IN_REVIEW', 'IN_PROGRESS', 'YOUR_REVIEW', 'COMPLETED'].indexOf(currentDisplayStatus) > index;
+              const isCurrent = currentDisplayStatus === displayStatus;
+              
               
               return (
-                <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div key={displayStatus} style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '120px' }}>
                   <div style={{
-                    width: '40px',
-                    height: '40px',
+                    width: '32px',
+                    height: '32px',
                     borderRadius: '50%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     background: isCompleted || isCurrent ? 'var(--primary)' : 'var(--surface)',
                     color: isCompleted || isCurrent ? 'white' : 'var(--text-light)',
-                    fontSize: '14px',
+                    fontSize: '12px',
                     fontWeight: 'bold',
-                    border: isCurrent ? '3px solid var(--primary-light-bg)' : 'none',
-                    position: 'relative'
+                    border: isCurrent ? '2px solid var(--primary-light-bg)' : 'none',
+                    position: 'relative',
+                    flexShrink: 0
                   }}>
-                    {isCompleted ? <CheckCircle size={20} /> : index + 1}
+                    {isCompleted ? <CheckCircle size={16} /> : index + 1}
                   </div>
-                  <div style={{ textAlign: 'center', minWidth: '100px' }}>
+                  <div style={{ textAlign: 'center', minWidth: '80px' }}>
                     <div style={{ 
-                      fontSize: '12px', 
+                      fontSize: '11px', 
                       fontWeight: '600', 
                       color: isCurrent ? 'var(--primary)' : isCompleted ? 'var(--text)' : 'var(--text-light)',
-                      marginBottom: '4px'
+                      marginBottom: '2px',
+                      lineHeight: '1.2'
                     }}>
-                      {status.replace('_', ' ')}
+                      {displayStatus.replace('_', ' ')}
                     </div>
                     <div style={{ 
-                      fontSize: '10px', 
+                      fontSize: '9px', 
                       color: 'var(--text-light)',
-                      textTransform: 'capitalize'
+                      textTransform: 'capitalize',
+                      lineHeight: '1.2'
                     }}>
-                      {status === 'SUBMITTED' && 'Task submitted'}
-                      {status === 'UNDER_REVIEW' && 'Being reviewed'}
-                      {status === 'DESIGNING' && 'In progress'}
-                      {status === 'COMPLETED' && 'Finished'}
+                      {displayStatus === 'SUBMITTED' && 'Submitted'}
+                      {displayStatus === 'IN_REVIEW' && 'Reviewing'}
+                      {displayStatus === 'IN_PROGRESS' && 'Designing'}
+                      {displayStatus === 'YOUR_REVIEW' && 'Your turn'}
+                      {displayStatus === 'COMPLETED' && 'Done'}
                     </div>
                   </div>
-                  {index < 3 && (
+                  {index < 4 && (
                     <div style={{
-                      width: '60px',
+                      width: '40px',
                       height: '2px',
                       background: isCompleted ? 'var(--primary)' : 'var(--border)',
-                      margin: '0 8px'
+                      margin: '0 4px',
+                      flexShrink: 0
                     }}></div>
                   )}
                 </div>
               );
-            })}
+            });
+            })()}
           </div>
           <div style={{ 
             textAlign: 'center', 
@@ -371,11 +428,23 @@ export default function TaskDetailPage() {
             color: 'var(--text-light)',
             fontStyle: 'italic'
           }}>
-            {task.status === 'SUBMITTED' && 'Your task has been submitted and is waiting for review'}
-            {task.status === 'IN_REVIEW' && 'Our team is reviewing your requirements'}
-            {task.status === 'IN_PROGRESS' && 'Our creative team is working on your project'}
-            {task.status === 'READY_FOR_REVIEW' && 'Your task is ready for your review'}
-            {task.status === 'COMPLETED' && 'Your task has been completed'}
+            {(() => {
+              // Check if there are designer deliverables waiting for client review
+              const hasDeliverablesForReview = task.designerDeliveries && 
+                (task.designerDeliveries.files.length > 0 || task.designerDeliveries.links.length > 0) &&
+                task.designerDeliveries.status === 'SUBMITTED';
+              
+              if (hasDeliverablesForReview) {
+                return 'Your design is ready for review - please review the deliverables below';
+              }
+              
+              if (task.status === 'SUBMITTED') return 'Your task has been submitted and is waiting for review';
+              if (task.status === 'IN_REVIEW') return 'Our team is reviewing your requirements';
+              if (task.status === 'IN_PROGRESS') return 'Our creative team is working on your project';
+              if (task.status === 'READY_FOR_REVIEW') return 'Your task is ready for your review';
+              if (task.status === 'COMPLETED') return 'Your task has been completed';
+              return 'Task in progress';
+            })()}
           </div>
         </div>
 
@@ -709,6 +778,260 @@ export default function TaskDetailPage() {
                     </div>
                   )}
             </div>
+          </div>
+        )}
+
+        {/* Designer Deliverables Section */}
+        {task.designerDeliveries && (task.designerDeliveries.files.length > 0 || task.designerDeliveries.links.length > 0) && (
+          <div className="card" style={{ padding: '32px', marginTop: '32px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--text)', marginBottom: '24px' }}>
+              Your Design
+            </h2>
+            
+            {/* Deliverable Status */}
+            {task.designerDeliveries.status && (
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  background: task.designerDeliveries.status === 'APPROVED' ? 'var(--success-light-bg)' : 
+                             task.designerDeliveries.status === 'REJECTED' ? 'var(--error-light-bg)' :
+                             task.designerDeliveries.status === 'REVISION_REQUESTED' ? 'var(--warning-light-bg)' : 'var(--surface)',
+                  color: task.designerDeliveries.status === 'APPROVED' ? 'var(--success)' :
+                         task.designerDeliveries.status === 'REJECTED' ? 'var(--error)' :
+                         task.designerDeliveries.status === 'REVISION_REQUESTED' ? 'var(--warning)' : 'var(--text)',
+                  border: `1px solid ${task.designerDeliveries.status === 'APPROVED' ? 'var(--success)' : 
+                           task.designerDeliveries.status === 'REJECTED' ? 'var(--error)' :
+                           task.designerDeliveries.status === 'REVISION_REQUESTED' ? 'var(--warning)' : 'var(--border)'}`
+                }}>
+                  {task.designerDeliveries.status === 'APPROVED' && <CheckCircle size={16} />}
+                  {task.designerDeliveries.status === 'REJECTED' && <X size={16} />}
+                  {task.designerDeliveries.status === 'REVISION_REQUESTED' && <AlertCircle size={16} />}
+                  {task.designerDeliveries.status === 'SUBMITTED' && <Clock size={16} />}
+                  {task.designerDeliveries.status.replace('_', ' ')}
+                </div>
+              </div>
+            )}
+
+            {/* Designer Notes */}
+            {task.designerDeliveries.notes && (
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                  Designer Notes
+                </h3>
+                <p style={{ fontSize: '14px', color: 'var(--text-light)', lineHeight: '1.5' }}>
+                  {task.designerDeliveries.notes}
+                </p>
+              </div>
+            )}
+
+            {/* Files */}
+            {task.designerDeliveries.files.length > 0 && (
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text)', marginBottom: '12px' }}>
+                  Files
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                  {task.designerDeliveries.files.map((file, index) => (
+                    <div key={index} style={{
+                      padding: '12px',
+                      background: 'var(--surface)',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border)',
+                      textAlign: 'center'
+                    }}>
+                      <File size={24} color="var(--text-light)" style={{ marginBottom: '8px' }} />
+                      <p style={{ fontSize: '12px', color: 'var(--text)', margin: '0 0 8px 0', wordBreak: 'break-word' }}>
+                        {file.name}
+                      </p>
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: '12px',
+                          color: 'var(--primary)',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        Download
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Links */}
+            {task.designerDeliveries.links.length > 0 && (
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text)', marginBottom: '12px' }}>
+                  Links
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {task.designerDeliveries.links.map((link, index) => (
+                    <div key={index} style={{
+                      padding: '12px',
+                      background: 'var(--surface)',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border)'
+                    }}>
+                      <a
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: '14px',
+                          color: 'var(--primary)',
+                          textDecoration: 'none',
+                          display: 'block'
+                        }}
+                      >
+                        {link.name}
+                      </a>
+                      {link.description && (
+                        <p style={{ fontSize: '12px', color: 'var(--text-light)', margin: '4px 0 0 0' }}>
+                          {link.description}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Review Section - Only show if not already approved */}
+            {task.designerDeliveries.status !== 'APPROVED' && (
+              <div style={{ marginTop: '24px', padding: '20px', background: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text)', marginBottom: '16px' }}>
+                  Review Deliverables
+                </h3>
+                
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: 'var(--text)', marginBottom: '8px' }}>
+                    Feedback <span style={{ color: 'var(--text-light)', fontWeight: '400' }}>(Required for rejection/revision)</span>
+                  </label>
+                  <textarea
+                    value={reviewFeedback}
+                    onChange={(e) => setReviewFeedback(e.target.value)}
+                    placeholder="Provide feedback on the deliverables..."
+                    rows={4}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--background)',
+                      color: 'var(--text)',
+                      fontSize: '14px',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => handleReviewDelivery('APPROVED')}
+                    disabled={isSubmittingReview}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: 'var(--success)',
+                      color: 'white',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: isSubmittingReview ? 'not-allowed' : 'pointer',
+                      opacity: isSubmittingReview ? 0.7 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <CheckCircle size={16} />
+                    Approve
+                  </button>
+                  
+                  <button
+                    onClick={() => handleReviewDelivery('REVISION_REQUESTED')}
+                    disabled={isSubmittingReview || !reviewFeedback.trim()}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: !reviewFeedback.trim() ? 'var(--text-light)' : 'var(--warning)',
+                      color: 'white',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: (isSubmittingReview || !reviewFeedback.trim()) ? 'not-allowed' : 'pointer',
+                      opacity: (isSubmittingReview || !reviewFeedback.trim()) ? 0.7 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <AlertCircle size={16} />
+                    Request Revision
+                  </button>
+                  
+                  <button
+                    onClick={() => handleReviewDelivery('REJECTED')}
+                    disabled={isSubmittingReview || !reviewFeedback.trim()}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: !reviewFeedback.trim() ? 'var(--text-light)' : 'var(--error)',
+                      color: 'white',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: (isSubmittingReview || !reviewFeedback.trim()) ? 'not-allowed' : 'pointer',
+                      opacity: (isSubmittingReview || !reviewFeedback.trim()) ? 0.7 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <X size={16} />
+                    Reject
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Show existing feedback */}
+            {(task.designerDeliveries.clientFeedback || task.designerDeliveries.adminFeedback) && (
+              <div style={{ marginTop: '24px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text)', marginBottom: '12px' }}>
+                  Feedback
+                </h3>
+                {task.designerDeliveries.clientFeedback && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <p style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-light)', marginBottom: '4px' }}>
+                      Your Feedback:
+                    </p>
+                    <p style={{ fontSize: '14px', color: 'var(--text)', padding: '12px', background: 'var(--surface)', borderRadius: '8px' }}>
+                      {task.designerDeliveries.clientFeedback}
+                    </p>
+                  </div>
+                )}
+                {task.designerDeliveries.adminFeedback && (
+                  <div>
+                    <p style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-light)', marginBottom: '4px' }}>
+                      Admin Feedback:
+                    </p>
+                    <p style={{ fontSize: '14px', color: 'var(--text)', padding: '12px', background: 'var(--surface)', borderRadius: '8px' }}>
+                      {task.designerDeliveries.adminFeedback}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

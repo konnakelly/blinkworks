@@ -62,8 +62,8 @@ export default function Navbar({ variant = 'home' }: NavbarProps) {
 
     if (userRole.role === 'ADMIN') {
       return [
-        ...baseLinks,
         { href: '/admin', label: 'Admin Panel', icon: Shield },
+        { href: '/admin/tasks/new', label: 'Create Task', icon: Layout },
         { href: '/designer', label: 'Designer View', icon: Palette }
       ];
     } else if (userRole.role === 'DESIGNER') {
@@ -283,19 +283,10 @@ export default function Navbar({ variant = 'home' }: NavbarProps) {
         
         {/* Desktop Navigation */}
         <div className="nav-links-desktop">
-          <Link href="#features" className="nav-link">Features</Link>
-          <Link href="#pricing" className="nav-link">Pricing</Link>
-          <Link href="#about" className="nav-link">About</Link>
         </div>
         
         {/* Desktop Auth Buttons */}
         <div className="nav-auth-desktop">
-          <Link href="/designer" className="btn-ghost" style={{ marginRight: '12px' }}>
-            Designers
-          </Link>
-          <Link href="/admin" className="btn-ghost" style={{ marginRight: '12px' }}>
-            Admin
-          </Link>
           <Link href="/auth/signin" className="btn-ghost">Sign In</Link>
           <Link href="/auth/signup" className="btn-nav">
             Get Started
@@ -320,11 +311,6 @@ export default function Navbar({ variant = 'home' }: NavbarProps) {
       {/* Mobile Navigation Menu */}
       <div className={`mobile-menu ${isMobileMenuOpen ? 'open' : ''}`}>
         <div className="mobile-menu-content">
-          <Link href="#features" className="mobile-nav-link">Features</Link>
-          <Link href="#pricing" className="mobile-nav-link">Pricing</Link>
-          <Link href="#about" className="mobile-nav-link">About</Link>
-          <Link href="/designer" className="mobile-nav-link">Designers</Link>
-          <Link href="/admin" className="mobile-nav-link">Admin</Link>
           <div className="mobile-auth-buttons">
             <Link href="/auth/signin" className="btn-ghost mobile-btn">Sign In</Link>
             <Link href="/auth/signup" className="btn-nav mobile-btn">

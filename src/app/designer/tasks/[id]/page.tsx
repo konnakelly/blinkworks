@@ -281,14 +281,20 @@ export default function DesignerTaskDetail() {
     switch (type) {
       case 'STATIC_DESIGN':
         return 'Static Design';
-      case 'VIDEO':
-        return 'Video';
+      case 'VIDEO_PRODUCTION':
+        return 'Video Production';
       case 'ANIMATION':
         return 'Animation';
       case 'ILLUSTRATION':
         return 'Illustration';
+      case 'BRANDING':
+        return 'Branding';
+      case 'WEB_DESIGN':
+        return 'Web Design';
+      case 'OTHER':
+        return 'Other';
       default:
-        return type;
+        return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
   };
 

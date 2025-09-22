@@ -91,6 +91,12 @@ export interface DesignerDeliveries {
   links: DesignerDelivery[];
   notes?: string;
   submittedAt?: Date;
+  status?: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'REVISION_REQUESTED';
+  clientFeedback?: string;
+  adminFeedback?: string;
+  reviewedBy?: string; // user ID of who reviewed it
+  reviewedAt?: Date;
+  revisionRequestedAt?: Date;
 }
 
 export interface Deliverable {
@@ -421,6 +427,48 @@ export const updateDesignerDeliveryNotes = async (
   
   await updateDoc(taskRef, {
     designerDeliveries: updatedDeliveries,
+    updatedAt: Timestamp.now()
+  });
+};
+
+// Deliverable review functions
+export const reviewDesignerDelivery = async (
+  taskId: string,
+  status: 'APPROVED' | 'REJECTED' | 'REVISION_REQUESTED',
+  feedback: string,
+  reviewedBy: string,
+  isClient: boolean = false
+): Promise<void> => {
+  const taskRef = doc(db, 'tasks', taskId);
+  const taskDoc = await getDoc(taskRef);
+  
+  if (!taskDoc.exists()) {
+    throw new Error('Task not found');
+  }
+  
+  const taskData = taskDoc.data();
+  const currentDeliveries = taskData.designerDeliveries || { files: [], links: [], notes: '' };
+  
+  const updatedDeliveries = {
+    ...currentDeliveries,
+    status,
+    reviewedBy,
+    reviewedAt: new Date(),
+    ...(isClient ? { clientFeedback: feedback } : { adminFeedback: feedback }),
+    ...(status === 'REVISION_REQUESTED' ? { revisionRequestedAt: new Date() } : {})
+  };
+  
+  // Update task status based on delivery review
+  let newTaskStatus = taskData.status;
+  if (status === 'APPROVED') {
+    newTaskStatus = 'COMPLETED';
+  } else if (status === 'REVISION_REQUESTED') {
+    newTaskStatus = 'REVISION_REQUESTED';
+  }
+  
+  await updateDoc(taskRef, {
+    designerDeliveries: updatedDeliveries,
+    status: newTaskStatus,
     updatedAt: Timestamp.now()
   });
 };
