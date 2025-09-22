@@ -4,12 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
-  ArrowRight, 
   CheckCircle, 
   Clock, 
   AlertCircle, 
   Eye, 
-  Users, 
   FileText, 
   Sparkles,
   BarChart3,

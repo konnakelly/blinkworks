@@ -1,6 +1,6 @@
 # BlinkWorks - Creative Brief Platform
 
-A comprehensive platform for managing creative briefs, tracking progress, and delivering exceptional creative work to clients. Built with Next.js, TypeScript, Prisma, and NextAuth.js.
+A comprehensive platform for managing creative briefs, tracking progress, and delivering exceptional creative work to clients. Built with Next.js, TypeScript, and Firebase.
 
 ## Features
 
@@ -28,9 +28,9 @@ A comprehensive platform for managing creative briefs, tracking progress, and de
 ## Tech Stack
 
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes, Prisma ORM
-- **Database**: PostgreSQL
-- **Authentication**: NextAuth.js with multiple providers
+- **Backend**: Next.js API Routes, Firebase Firestore
+- **Database**: Firebase Firestore
+- **Authentication**: Firebase Auth with email/password
 - **UI Components**: Radix UI, Lucide React icons
 - **Forms**: React Hook Form with Zod validation
 
@@ -58,31 +58,21 @@ A comprehensive platform for managing creative briefs, tracking progress, and de
 3. **Set up environment variables**
    Create a `.env` file in the root directory:
    ```env
-   # Database
-   DATABASE_URL="postgresql://username:password@localhost:5432/blinkworks?schema=public"
+   # Firebase Configuration
+   NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain_here
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id_here
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket_here
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id_here
+   NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id_here
 
-   # NextAuth.js
-   NEXTAUTH_URL="http://localhost:3000"
-   NEXTAUTH_SECRET="your-secret-key-here"
-
-   # OAuth Providers (optional)
-   GOOGLE_CLIENT_ID=""
-   GOOGLE_CLIENT_SECRET=""
-   GITHUB_CLIENT_ID=""
-   GITHUB_CLIENT_SECRET=""
    ```
 
-4. **Set up the database**
-   ```bash
-   # Generate Prisma client
-   npx prisma generate
+4. **Set up Firebase**
+   - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+   - Enable Authentication and Firestore Database
+   - Copy your Firebase config values to the `.env` file
 
-   # Run database migrations
-   npx prisma migrate dev
-
-   # (Optional) Seed the database
-   npx prisma db seed
-   ```
 
 5. **Start the development server**
    ```bash
@@ -108,7 +98,6 @@ The platform uses a comprehensive database schema with the following main entiti
 
 ### Authentication
 - `POST /api/auth/register` - User registration
-- `GET/POST /api/auth/[...nextauth]` - NextAuth.js endpoints
 
 ### Tasks
 - `GET /api/tasks` - Get user's tasks
@@ -134,11 +123,9 @@ src/
 │   ├── admin/             # Admin dashboard
 │   └── globals.css        # Global styles
 ├── lib/                   # Utility functions
-│   ├── auth.ts           # NextAuth configuration
-│   ├── prisma.ts         # Prisma client
+│   ├── firebase.ts       # Firebase configuration
+│   ├── firestore.ts      # Firestore database functions
 │   └── utils.ts          # Helper functions
-├── types/                 # TypeScript type definitions
-└── generated/             # Generated Prisma client
 ```
 
 ## Development

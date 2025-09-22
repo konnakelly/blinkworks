@@ -238,6 +238,7 @@ export const deleteTask = async (taskId: string): Promise<void> => {
 };
 
 // Update a task
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const updateTask = async (taskId: string, taskData: any): Promise<void> => {
   const taskRef = doc(db, 'tasks', taskId);
   await updateDoc(taskRef, {

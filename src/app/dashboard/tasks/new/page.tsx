@@ -49,6 +49,7 @@ export default function NewTask() {
     const forceBlackText = () => {
       // Force form elements
       const inputs = document.querySelectorAll('input, textarea, select');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       inputs.forEach((element: any) => {
         element.style.color = '#000000';
         element.style.backgroundColor = '#ffffff';

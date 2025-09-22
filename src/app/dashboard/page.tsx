@@ -140,6 +140,7 @@ export default function DashboardPage() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formatDate = (date: any) => {
     if (!date) return 'N/A';
     
@@ -162,6 +163,7 @@ export default function DashboardPage() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getRelativeTime = (date: any, isDeadline: boolean = false) => {
     if (!date) return 'N/A';
     
@@ -234,6 +236,7 @@ export default function DashboardPage() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getTimeUntilDeadline = (deadline: any) => {
     return getRelativeTime(deadline, true);
   };

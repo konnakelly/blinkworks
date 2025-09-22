@@ -27,8 +27,8 @@ export default function SignIn() {
     try {
       await signIn(formData.email, formData.password);
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Failed to sign in. Please check your credentials.");
+    } catch (err: unknown) {
+      setError((err as Error).message || "Failed to sign in. Please check your credentials.");
     } finally {
       setLoading(false);
     }

@@ -45,8 +45,8 @@ export default function SignUp() {
         companySize: formData.companySize,
       });
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Failed to create account");
+    } catch (err: unknown) {
+      setError((err as Error).message || "Failed to create account");
     } finally {
       setLoading(false);
     }

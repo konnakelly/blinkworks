@@ -4,10 +4,14 @@ import React, { createContext, useContext, ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
 interface AuthContextType {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   user: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   userProfile: any;
   loading: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   signUp: (email: string, password: string, userData: any) => Promise<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   signIn: (email: string, password: string) => Promise<any>;
   logout: () => Promise<void>;
 }
