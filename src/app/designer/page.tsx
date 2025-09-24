@@ -78,10 +78,11 @@ export default function DesignerMarketplace() {
           ? { ...task, status: 'IN_PROGRESS', assignedDesigner: user.uid }
           : task
       ));
-      alert("Task claimed successfully! You can now start working on it.");
+      // Show success message (you can add toast notifications here if needed)
+      console.log("Task claimed successfully!");
     } catch (error) {
       console.error("Error claiming task:", error);
-      alert("Failed to claim task. Please try again.");
+      // Show error message (you can add toast notifications here if needed)
     } finally {
       setIsClaiming(null);
     }

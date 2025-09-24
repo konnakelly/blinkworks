@@ -13,10 +13,12 @@ import {
   XCircle,
   Search,
   Filter,
-  Sparkles
+  Sparkles,
+  Plus,
+  X
 } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { getAllUsers, updateUserRole, User } from "@/lib/firestore";
+import { getAllUsers, updateUserRole, createUserRecord, User } from "@/lib/firestore";
 import { RoleGuard } from "@/components/RoleGuard";
 
 export default function UserManagement() {
@@ -28,6 +30,18 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("ALL");
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  
+  // Create user modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    email: '',
+    name: '',
+    role: 'CLIENT' as User['role'],
+    companyName: '',
+    companySize: 'STARTUP' as 'STARTUP' | 'SMALL' | 'MEDIUM' | 'LARGE' | 'ENTERPRISE'
+  });
+  const [createError, setCreateError] = useState("");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -65,6 +79,49 @@ export default function UserManagement() {
     } finally {
       setIsUpdating(null);
     }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCreating(true);
+    setCreateError("");
+
+    try {
+      const firestoreUser = await createUserRecord(
+        createForm.email,
+        createForm.name,
+        createForm.role,
+        createForm.companyName,
+        createForm.companySize
+      );
+
+      // Add the new user to the list
+      setUsers(prev => [...prev, firestoreUser]);
+      
+      // Reset form and close modal
+      resetCreateForm();
+      setShowCreateModal(false);
+      
+      // Show success message
+      alert("User created successfully! The user can now sign in with their email and password.");
+      
+    } catch (err: any) {
+      console.error("Error creating user:", err);
+      setCreateError(err.message || "Failed to create user. Please try again.");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const resetCreateForm = () => {
+    setCreateForm({
+      email: '',
+      name: '',
+      role: 'CLIENT',
+      companyName: '',
+      companySize: 'STARTUP'
+    });
+    setCreateError("");
   };
 
   const filteredUsers = users.filter(user => {
@@ -161,16 +218,46 @@ export default function UserManagement() {
                   Manage user roles and permissions
                 </p>
               </div>
-              <div style={{ 
-                width: '72px', 
-                height: '72px', 
-                background: 'linear-gradient(135deg, #f6823b, #f65c8b)', 
-                borderRadius: '20px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center' 
-              }}>
-                <Users size={36} color="white" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 20px',
+                    background: 'var(--primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--primary-dark)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--primary)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  <Plus size={16} />
+                  Create User
+                </button>
+                <div style={{ 
+                  width: '72px', 
+                  height: '72px', 
+                  background: 'linear-gradient(135deg, #f6823b, #f65c8b)', 
+                  borderRadius: '20px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center' 
+                }}>
+                  <Users size={36} color="white" />
+                </div>
               </div>
             </div>
 
@@ -406,6 +493,294 @@ export default function UserManagement() {
             )}
           </div>
         </div>
+
+        {/* Create User Modal */}
+        {showCreateModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}>
+            <div style={{
+              background: 'var(--background)',
+              borderRadius: '16px',
+              padding: '32px',
+              width: '100%',
+              maxWidth: '500px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                <div>
+                  <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--text)', margin: 0, marginBottom: '4px' }}>
+                    Create New User
+                  </h2>
+                  <p style={{ fontSize: '12px', color: 'var(--text-light)', margin: 0 }}>
+                    Creates a user record that can sign in with their email
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    resetCreateForm();
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-light)',
+                    cursor: 'pointer',
+                    padding: '8px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--surface)';
+                    e.currentTarget.style.color = 'var(--text)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'none';
+                    e.currentTarget.style.color = 'var(--text-light)';
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateUser}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Email */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      value={createForm.email}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        fontSize: '14px',
+                        outline: 'none',
+                        transition: 'border-color 0.2s ease'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                      onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+                    />
+                  </div>
+
+
+                  {/* Name */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={createForm.name}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        fontSize: '14px',
+                        outline: 'none',
+                        transition: 'border-color 0.2s ease'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                      onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+                    />
+                  </div>
+
+                  {/* Role */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                      Role *
+                    </label>
+                    <select
+                      value={createForm.role}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, role: e.target.value as User['role'] }))}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        fontSize: '14px',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="CLIENT">Client</option>
+                      <option value="DESIGNER">Designer</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+
+                  {/* Company Name */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                      Company Name
+                    </label>
+                    <input
+                      type="text"
+                      value={createForm.companyName}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, companyName: e.target.value }))}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        fontSize: '14px',
+                        outline: 'none',
+                        transition: 'border-color 0.2s ease'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                      onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+                    />
+                  </div>
+
+                  {/* Company Size */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                      Company Size
+                    </label>
+                    <select
+                      value={createForm.companySize}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, companySize: e.target.value as any }))}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        fontSize: '14px',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="STARTUP">Startup (1-10)</option>
+                      <option value="SMALL">Small (11-50)</option>
+                      <option value="MEDIUM">Medium (51-200)</option>
+                      <option value="LARGE">Large (201-1000)</option>
+                      <option value="ENTERPRISE">Enterprise (1000+)</option>
+                    </select>
+                  </div>
+
+                  {/* Error Message */}
+                  {createError && (
+                    <div style={{
+                      padding: '12px 16px',
+                      background: 'var(--error-light-bg)',
+                      border: '1px solid var(--error)',
+                      borderRadius: '8px',
+                      color: 'var(--error)',
+                      fontSize: '14px'
+                    }}>
+                      {createError}
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCreateModal(false);
+                        resetCreateForm();
+                      }}
+                      style={{
+                        padding: '12px 24px',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--background)';
+                        e.currentTarget.style.borderColor = 'var(--text-light)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'var(--surface)';
+                        e.currentTarget.style.borderColor = 'var(--border)';
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isCreating}
+                      style={{
+                        padding: '12px 24px',
+                        background: isCreating ? 'var(--text-light)' : 'var(--primary)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: isCreating ? 'not-allowed' : 'pointer',
+                        opacity: isCreating ? 0.7 : 1,
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      {isCreating ? (
+                        <>
+                          <div style={{
+                            width: '16px',
+                            height: '16px',
+                            border: '2px solid white',
+                            borderTop: '2px solid transparent',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite'
+                          }} />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus size={16} />
+                          Create User
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </RoleGuard>
   );

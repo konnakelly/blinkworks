@@ -12,16 +12,13 @@ import {
   Image, 
   Video, 
   Sparkles,
-  Save,
-  Send,
   User,
-  Calendar,
   MessageSquare,
-  Edit,
-  X
+  X,
+  ExternalLink
 } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { getTaskById, updateTask, Task, pushTaskToMarketplace, getUserById, User as FirestoreUser, reviewDesignerDelivery } from "@/lib/firestore";
+import { getTaskById, updateTask, Task, getUserById, User as FirestoreUser, reviewDesignerDelivery, getAllUsers, getTasksByUserId } from "@/lib/firestore";
 import { RoleGuard } from "@/components/RoleGuard";
 
 export default function AdminTaskReview() {
@@ -32,13 +29,22 @@ export default function AdminTaskReview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isPushing, setIsPushing] = useState(false);
   const [adminNotes, setAdminNotes] = useState("");
   const [assignedDesigner, setAssignedDesigner] = useState("");
   const [newStatus, setNewStatus] = useState("");
   const [clientInfo, setClientInfo] = useState<FirestoreUser | null>(null);
   const [reviewFeedback, setReviewFeedback] = useState("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [designers, setDesigners] = useState<Array<FirestoreUser & { workload: number }>>([]);
+  const [loadingDesigners, setLoadingDesigners] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmationAction, setConfirmationAction] = useState<{
+    type: 'approve' | 'reject' | 'assign' | 'update';
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -77,7 +83,288 @@ export default function AdminTaskReview() {
     };
 
     fetchTask();
+    fetchDesignersWithWorkload();
   }, [user, authLoading, router, params.id]);
+
+  const fetchDesignersWithWorkload = async () => {
+    setLoadingDesigners(true);
+    try {
+      const allUsers = await getAllUsers();
+      const designerUsers = allUsers.filter(user => user.role === 'DESIGNER');
+      
+      // Calculate workload for each designer
+      const designersWithWorkload = await Promise.all(
+        designerUsers.map(async (designer) => {
+          // Get tasks assigned to this designer
+          const designerTasks = await getTasksByUserId(designer.id);
+          const activeTasks = designerTasks.filter(task => 
+            ['IN_PROGRESS', 'REVISION_REQUESTED'].includes(task.status)
+          ).length;
+          
+          return {
+            ...designer,
+            workload: activeTasks
+          };
+        })
+      );
+      
+      // Sort by workload (ascending - least busy first)
+      designersWithWorkload.sort((a, b) => a.workload - b.workload);
+      setDesigners(designersWithWorkload);
+    } catch (error) {
+      console.error("Error fetching designers:", error);
+    } finally {
+      setLoadingDesigners(false);
+    }
+  };
+
+  const showConfirmationModal = (type: 'approve' | 'reject' | 'assign' | 'update', message: string, onConfirm: () => void) => {
+    setConfirmationAction({ type, message, onConfirm });
+    setShowConfirmation(true);
+  };
+
+  const showSuccessMessage = (message: string) => {
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(""), 5000);
+  };
+
+  const showErrorMessage = (message: string) => {
+    setErrorMessage(message);
+    setTimeout(() => setErrorMessage(""), 5000);
+  };
+
+  const getContextualActions = () => {
+    if (!task) return [];
+
+    const actions = [];
+
+    switch (task.status) {
+      case 'SUBMITTED':
+        actions.push(
+          {
+            type: 'primary',
+            label: 'Approve & Send to Marketplace',
+            icon: <CheckCircle size={16} />,
+            onClick: () => {
+              showConfirmationModal(
+                'approve',
+                'Are you sure you want to approve this task and send it to the marketplace?',
+                () => {
+                  setNewStatus('IN_REVIEW');
+                  handleStatusUpdate();
+                }
+              );
+            }
+          },
+          {
+            type: 'warning',
+            label: 'Request More Info',
+            icon: <MessageSquare size={16} />,
+            onClick: () => {
+              if (!adminNotes.trim()) {
+                showErrorMessage('Please provide feedback when requesting more information.');
+                return;
+              }
+              showConfirmationModal(
+                'reject',
+                'Are you sure you want to request more information from the client?',
+                () => {
+                  setNewStatus('INFO_REQUESTED');
+                  handleStatusUpdate();
+                }
+              );
+            }
+          }
+        );
+        break;
+
+      case 'IN_REVIEW':
+        if (task.pushedToMarketplace) {
+          actions.push(
+            {
+              type: 'info',
+              label: 'Message Client',
+              icon: <MessageSquare size={16} />,
+              onClick: () => {
+                // This could open a message modal or redirect to messaging
+                showSuccessMessage('Messaging feature coming soon!');
+              }
+            },
+            {
+              type: 'secondary',
+              label: 'Reassign Designer',
+              icon: <User size={16} />,
+              onClick: () => {
+                showConfirmationModal(
+                  'assign',
+                  'Are you sure you want to reassign this task to a different designer?',
+                  () => {
+                    // This could open a designer selection modal
+                    showSuccessMessage('Designer reassignment feature coming soon!');
+                  }
+                );
+              }
+            }
+          );
+        } else {
+          actions.push(
+            {
+              type: 'primary',
+              label: 'Send to Marketplace',
+              icon: <CheckCircle size={16} />,
+              onClick: () => {
+                showConfirmationModal(
+                  'approve',
+                  'Are you sure you want to send this task to the marketplace?',
+                  () => {
+                    setNewStatus('IN_REVIEW');
+                    handleStatusUpdate();
+                  }
+                );
+              }
+            }
+          );
+        }
+        break;
+
+      case 'IN_PROGRESS':
+        actions.push(
+          {
+            type: 'primary',
+            label: 'Message Designer',
+            icon: <MessageSquare size={16} />,
+            onClick: () => {
+              showSuccessMessage('Messaging feature coming soon!');
+            }
+          },
+          {
+            type: 'info',
+            label: 'Message Client',
+            icon: <MessageSquare size={16} />,
+            onClick: () => {
+              showSuccessMessage('Messaging feature coming soon!');
+            }
+          },
+          {
+            type: 'secondary',
+            label: 'Reassign Designer',
+            icon: <User size={16} />,
+            onClick: () => {
+              showConfirmationModal(
+                'assign',
+                'Are you sure you want to reassign this task to a different designer?',
+                () => {
+                  showSuccessMessage('Designer reassignment feature coming soon!');
+                }
+              );
+            }
+          }
+        );
+        break;
+
+      case 'READY_FOR_REVIEW':
+        actions.push(
+          {
+            type: 'primary',
+            label: 'Review Delivery',
+            icon: <CheckCircle size={16} />,
+            onClick: () => {
+              showSuccessMessage('Review delivery feature coming soon!');
+            }
+          },
+          {
+            type: 'info',
+            label: 'Message Client',
+            icon: <MessageSquare size={16} />,
+            onClick: () => {
+              showSuccessMessage('Messaging feature coming soon!');
+            }
+          }
+        );
+        break;
+
+      case 'REVISION_REQUESTED':
+        actions.push(
+          {
+            type: 'primary',
+            label: 'Message Designer',
+            icon: <MessageSquare size={16} />,
+            onClick: () => {
+              showSuccessMessage('Messaging feature coming soon!');
+            }
+          },
+          {
+            type: 'info',
+            label: 'Message Client',
+            icon: <MessageSquare size={16} />,
+            onClick: () => {
+              showSuccessMessage('Messaging feature coming soon!');
+            }
+          }
+        );
+        break;
+
+      case 'COMPLETED':
+        actions.push(
+          {
+            type: 'success',
+            label: 'Mark as Delivered',
+            icon: <CheckCircle size={16} />,
+            onClick: () => {
+              showConfirmationModal(
+                'update',
+                'Are you sure you want to mark this task as delivered to the client?',
+                () => {
+                  showSuccessMessage('Task marked as delivered!');
+                }
+              );
+            }
+          },
+          {
+            type: 'info',
+            label: 'Message Client',
+            icon: <MessageSquare size={16} />,
+            onClick: () => {
+              showSuccessMessage('Messaging feature coming soon!');
+            }
+          }
+        );
+        break;
+
+      case 'INFO_REQUESTED':
+        actions.push(
+          {
+            type: 'primary',
+            label: 'Message Client',
+            icon: <MessageSquare size={16} />,
+            onClick: () => {
+              showSuccessMessage('Messaging feature coming soon!');
+            }
+          },
+          {
+            type: 'warning',
+            label: 'Approve & Send to Marketplace',
+            icon: <CheckCircle size={16} />,
+            onClick: () => {
+              showConfirmationModal(
+                'approve',
+                'Are you sure you want to approve this task and send it to the marketplace?',
+                () => {
+                  setNewStatus('IN_REVIEW');
+                  handleStatusUpdate();
+                }
+              );
+            }
+          }
+        );
+        break;
+
+      default:
+        break;
+    }
+
+    return actions;
+  };
 
   const handleStatusUpdate = async () => {
     if (!task) return;
@@ -99,34 +386,15 @@ export default function AdminTaskReview() {
         assignedDesigner: assignedDesigner
       } : null);
       
-      alert("Task updated successfully!");
+      showSuccessMessage("Task updated successfully!");
     } catch (error) {
       console.error("Error updating task:", error);
-      alert("Failed to update task. Please try again.");
+      showErrorMessage("Failed to update task. Please try again.");
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const handlePushToMarketplace = async () => {
-    if (!task || isPushing) return;
-    setIsPushing(true);
-    try {
-      await pushTaskToMarketplace(task.id);
-      setTask(prev => prev ? { 
-        ...prev, 
-        pushedToMarketplace: true, 
-        pushedAt: new Date(),
-        status: 'IN_REVIEW'
-      } : null);
-      alert("Task pushed to designer marketplace successfully!");
-    } catch (err) {
-      console.error("Error pushing task to marketplace:", err);
-      setError("Failed to push task to marketplace.");
-    } finally {
-      setIsPushing(false);
-    }
-  };
 
   const handleReviewDelivery = async (status: 'APPROVED' | 'REJECTED' | 'REVISION_REQUESTED') => {
     if (!task || !user) return;
@@ -142,10 +410,10 @@ export default function AdminTaskReview() {
       }
       
       setReviewFeedback("");
-      alert(`Delivery ${status.toLowerCase()} successfully!`);
+      showSuccessMessage(`Delivery ${status.toLowerCase()} successfully!`);
     } catch (err) {
       console.error("Error reviewing delivery:", err);
-      alert("Failed to submit review. Please try again.");
+      showErrorMessage("Failed to submit review. Please try again.");
     } finally {
       setIsSubmittingReview(false);
     }
@@ -286,65 +554,287 @@ export default function AdminTaskReview() {
       </nav>
 
       <div className="container" style={{ paddingTop: '32px', paddingBottom: '64px' }}>
-        {/* Task Header */}
-        <div className="card" style={{ marginBottom: '32px', padding: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
-            <div style={{ flex: 1 }}>
-              <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--text)', marginBottom: '8px' }}>
-                {task.title}
-              </h1>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                <User size={16} color="var(--text-light)" />
-                <span style={{ fontSize: '14px', color: 'var(--text-light)', fontWeight: '500' }}>
-                  Client: {clientInfo?.name || 'Loading...'}
-                </span>
-                {clientInfo?.email && (
-                  <span style={{ fontSize: '12px', color: 'var(--text-light)', opacity: 0.7 }}>
-                    ({clientInfo.email})
-                  </span>
+        {/* Admin Feedback History - show all feedback requests */}
+        {task.adminFeedbackHistory && task.adminFeedbackHistory.length > 0 && (
+          <div className="card" style={{ marginBottom: '32px', padding: '24px' }}>
+            <h3 style={{ 
+              fontSize: '18px', 
+              fontWeight: 'bold', 
+              color: 'var(--text)', 
+              margin: '0 0 16px 0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <MessageSquare size={20} />
+              Feedback History ({task.adminFeedbackHistory.length} request{task.adminFeedbackHistory.length !== 1 ? 's' : ''})
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {task.adminFeedbackHistory.map((entry, index) => (
+                <div key={index} style={{
+                  background: entry.resolvedAt ? 'var(--success-light-bg)' : 'var(--warning-light-bg)',
+                  border: `1px solid ${entry.resolvedAt ? 'var(--success)' : 'var(--warning)'}`,
+                  borderRadius: '8px',
+                  padding: '12px'
+                }}>
+                  <div style={{ 
+                    fontSize: '14px', 
+                    color: 'var(--text)', 
+                    marginBottom: '8px',
+                    lineHeight: '1.4'
+                  }}>
+                    {entry.feedback}
+                  </div>
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: 'var(--text-light)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span>Requested: {entry.requestedAt instanceof Date ? entry.requestedAt.toLocaleDateString() : (entry.requestedAt as { toDate: () => Date }).toDate().toLocaleDateString()}</span>
+                    {entry.resolvedAt && (
+                      <span style={{ color: 'var(--success)' }}>
+                        ✓ Resolved: {entry.resolvedAt instanceof Date ? entry.resolvedAt.toLocaleDateString() : (entry.resolvedAt as { toDate: () => Date }).toDate().toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Admin Actions - Consolidated */}
+        <div className="card" style={{ marginBottom: '32px', padding: '24px' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text)', marginBottom: '24px' }}>
+            Admin Actions
+          </h3>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Designer Assignment - Only show for unassigned tasks */}
+            {(!task?.assignedDesigner || task?.status === 'SUBMITTED' || task?.status === 'IN_REVIEW') && (
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                  Assign Designer
+                </label>
+                <select
+                  value={assignedDesigner}
+                  onChange={(e) => setAssignedDesigner(e.target.value)}
+                  disabled={loadingDesigners}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border)',
+                    background: loadingDesigners ? 'var(--surface)' : 'white',
+                    color: 'var(--text)',
+                    fontSize: '14px',
+                    cursor: loadingDesigners ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  <option value="">
+                    {loadingDesigners ? 'Loading designers...' : 'Select a designer'}
+                  </option>
+                  {designers.map((designer) => (
+                    <option key={designer.id} value={designer.id}>
+                      {designer.name} {designer.email && `(${designer.email})`} - {designer.workload === 0 ? 'Available' : `${designer.workload} active task${designer.workload !== 1 ? 's' : ''}`}
+                    </option>
+                  ))}
+                </select>
+                {designers.length > 0 && (
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: 'var(--text-light)', 
+                    marginTop: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    <span>💡 Designers are sorted by workload (least busy first)</span>
+                  </div>
                 )}
               </div>
-              <p style={{ fontSize: '16px', color: 'var(--text-light)', margin: 0 }}>
-                {task.description}
-              </p>
-            </div>
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px', 
-              padding: '8px 16px', 
-              borderRadius: '12px', 
-              background: 'var(--surface)',
-              fontSize: '14px',
-              fontWeight: '600',
-              color: getStatusColor(task.status)
-            }}>
-              {getStatusIcon(task.status)}
-              {task.status.replace('_', ' ')}
-            </div>
-          </div>
+            )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px' }}>
-            <div>
-              <p style={{ fontSize: '14px', color: 'var(--text-light)', margin: '0 0 4px 0' }}><strong>Type</strong></p>
-              <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--text)', margin: 0 }}>{formatTaskType(task.type)}</p>
-            </div>
-            <div>
-              <p style={{ fontSize: '14px', color: 'var(--text-light)', margin: '0 0 4px 0' }}><strong>Priority</strong></p>
-              <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--text)', margin: 0 }}>{task.priority}</p>
-            </div>
-            <div>
-              <p style={{ fontSize: '14px', color: 'var(--text-light)', margin: '0 0 4px 0' }}><strong>Created</strong></p>
-              <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--text)', margin: 0 }}>{formatDate(task.createdAt)}</p>
-            </div>
-            {task.deadline && (
+            {/* Feedback Input - Only show for tasks that need feedback */}
+            {(task?.status === 'SUBMITTED' || task?.status === 'INFO_REQUESTED' || task?.status === 'REVISION_REQUESTED') && (
               <div>
-                <p style={{ fontSize: '14px', color: 'var(--text-light)', margin: '0 0 4px 0' }}><strong>Deadline</strong></p>
-                <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--text)', margin: 0 }}>{formatDate(task.deadline)}</p>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                  Feedback Message
+                </label>
+                <textarea
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  placeholder="Add feedback for the client or designer..."
+                  style={{
+                    width: '100%',
+                    minHeight: '100px',
+                    padding: '12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    background: 'var(--surface)',
+                    color: 'var(--text)',
+                    fontSize: '14px',
+                    resize: 'vertical',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+                />
               </div>
             )}
+
+            {/* Contextual Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {getContextualActions().map((action, index) => {
+                const getButtonStyle = (type: string) => {
+                  const baseStyle = {
+                    padding: '12px 24px',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: isUpdating ? 'not-allowed' : 'pointer',
+                    opacity: isUpdating ? 0.7 : 1,
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  };
+
+                  switch (type) {
+                    case 'primary':
+                      return {
+                        ...baseStyle,
+                        border: 'none',
+                        background: 'var(--primary)',
+                        color: 'white'
+                      };
+                    case 'warning':
+                      return {
+                        ...baseStyle,
+                        border: '1px solid var(--warning)',
+                        background: 'var(--warning-light-bg)',
+                        color: 'var(--warning)'
+                      };
+                    case 'info':
+                      return {
+                        ...baseStyle,
+                        border: '1px solid var(--primary)',
+                        background: 'var(--primary-light-bg)',
+                        color: 'var(--primary)'
+                      };
+                    case 'secondary':
+                      return {
+                        ...baseStyle,
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-light)',
+                        fontSize: '12px',
+                        padding: '8px 16px'
+                      };
+                    case 'success':
+                      return {
+                        ...baseStyle,
+                        border: 'none',
+                        background: 'var(--success)',
+                        color: 'white'
+                      };
+                    default:
+                      return baseStyle;
+                  }
+                };
+
+                return (
+                  <button
+                    key={index}
+                    onClick={action.onClick}
+                    disabled={isUpdating}
+                    style={getButtonStyle(action.type)}
+                  >
+                    {action.icon}
+                    {action.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
+
+        {/* Task Header */}
+        <div className="card" style={{ marginBottom: '32px', padding: '32px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <div style={{ flex: 1 }}>
+                <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: 'var(--text)', marginBottom: '8px' }}>
+                  {task.title}
+                </h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <User size={16} color="var(--text-light)" />
+                  <span style={{ fontSize: '14px', color: 'var(--text-light)', fontWeight: '500' }}>
+                    Client: {clientInfo?.name || 'Loading...'}
+                  </span>
+                  {clientInfo?.email && (
+                    <span style={{ fontSize: '12px', color: 'var(--text-light)', opacity: 0.7 }}>
+                      ({clientInfo.email})
+                    </span>
+                  )}
+                </div>
+                {task.assignedDesigner && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <User size={16} color="var(--primary)" />
+                    <span style={{ fontSize: '14px', color: 'var(--primary)', fontWeight: '500' }}>
+                      Designer: {designers.find(d => d.id === task.assignedDesigner)?.name || 'Unknown Designer'}
+                    </span>
+                    {designers.find(d => d.id === task.assignedDesigner)?.email && (
+                      <span style={{ fontSize: '12px', color: 'var(--primary)', opacity: 0.7 }}>
+                        ({designers.find(d => d.id === task.assignedDesigner)?.email})
+                      </span>
+                    )}
+                  </div>
+                )}
+                <p style={{ fontSize: '16px', color: 'var(--text-light)', margin: 0 }}>
+                  {task.description}
+                </p>
+              </div>
+              
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                padding: '8px 16px', 
+                borderRadius: '12px', 
+                background: 'var(--surface)',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: getStatusColor(task.status)
+              }}>
+                {getStatusIcon(task.status)}
+                {task.status.replace('_', ' ')}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px' }}>
+              <div>
+                <p style={{ fontSize: '14px', color: 'var(--text-light)', margin: '0 0 4px 0' }}><strong>Type</strong></p>
+                <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--text)', margin: 0 }}>{formatTaskType(task.type)}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: '14px', color: 'var(--text-light)', margin: '0 0 4px 0' }}><strong>Priority</strong></p>
+                <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--text)', margin: 0 }}>{task.priority}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: '14px', color: 'var(--text-light)', margin: '0 0 4px 0' }}><strong>Created</strong></p>
+                <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--text)', margin: 0 }}>{formatDate(task.createdAt)}</p>
+              </div>
+              {task.deadline && (
+                <div>
+                  <p style={{ fontSize: '14px', color: 'var(--text-light)', margin: '0 0 4px 0' }}><strong>Deadline</strong></p>
+                  <p style={{ fontSize: '16px', fontWeight: '500', color: 'var(--text)', margin: 0 }}>{formatDate(task.deadline)}</p>
+                </div>
+              )}
+            </div>
+          </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '32px' }}>
           {/* Task Details */}
@@ -509,171 +999,62 @@ export default function AdminTaskReview() {
             </div>
           </div>
 
-          {/* Admin Actions Sidebar */}
-          <div className="card" style={{ padding: '32px', height: 'fit-content' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text)', marginBottom: '24px' }}>
-              Admin Actions
-            </h3>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {/* Status Update */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
-                  Update Status
-                </label>
-                <select
-                  value={newStatus}
-                  onChange={(e) => setNewStatus(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--text)',
-                    fontSize: '14px'
-                  }}
-                >
-                  <option value="SUBMITTED">Submitted</option>
-                  <option value="UNDER_REVIEW">Under Review</option>
-                  <option value="DESIGNING">Designing</option>
-                  <option value="COMPLETED">Completed</option>
-                </select>
+          {/* In Design Link Section - Visible to Admins and Designers Only */}
+          {task.inDesignLink && (
+            <div className="card" style={{ padding: '20px', marginBottom: '24px' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '12px',
+                marginBottom: '12px'
+              }}>
+                <h3 style={{ 
+                  fontSize: '16px', 
+                  fontWeight: '600', 
+                  color: 'var(--text)', 
+                  margin: 0 
+                }}>
+                  In Design Link
+                </h3>
+                <span style={{ 
+                  fontSize: '12px', 
+                  color: 'var(--text-light)', 
+                  background: 'var(--surface)', 
+                  padding: '2px 8px', 
+                  borderRadius: '4px',
+                  border: '1px solid var(--border)'
+                }}>
+                  Admin Only
+                </span>
               </div>
-
-              {/* Designer Assignment */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
-                  Assign Designer
-                </label>
-                <input
-                  type="text"
-                  value={assignedDesigner}
-                  onChange={(e) => setAssignedDesigner(e.target.value)}
-                  placeholder="Designer name or ID"
+              
+              <div style={{
+                padding: '12px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '6px'
+              }}>
+                <a
+                  href={task.inDesignLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--text)',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-
-              {/* Admin Notes */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
-                  Admin Notes
-                </label>
-                <textarea
-                  value={adminNotes}
-                  onChange={(e) => setAdminNotes(e.target.value)}
-                  placeholder="Add context or notes for the designer..."
-                  rows={6}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--text)',
-                    fontSize: '14px',
-                    resize: 'vertical'
-                  }}
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <button
-                  onClick={handleStatusUpdate}
-                  disabled={isUpdating}
-                  className="btn-primary"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    fontSize: '14px',
-                    opacity: isUpdating ? 0.7 : 1,
-                    cursor: isUpdating ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  {isUpdating ? (
-                    <>
-                      <div style={{ 
-                        width: '16px', 
-                        height: '16px', 
-                        border: '2px solid white', 
-                        borderTop: '2px solid transparent', 
-                        borderRadius: '50%', 
-                        animation: 'spin 1s linear infinite' 
-                      }}></div>
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      Update Task
-                    </>
-                  )}
-                </button>
-
-                {!task.pushedToMarketplace && (
-                  <button
-                    onClick={handlePushToMarketplace}
-                    disabled={isPushing}
-                    className="btn-outline"
-                    style={{ 
-                      width: '100%', 
-                      padding: '12px', 
-                      fontSize: '14px',
-                      opacity: isPushing ? 0.7 : 1,
-                      cursor: isPushing ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    {isPushing ? (
-                      <>
-                        <div style={{ 
-                          width: '16px', 
-                          height: '16px', 
-                          border: '2px solid var(--primary)', 
-                          borderTop: '2px solid transparent', 
-                          borderRadius: '50%', 
-                          animation: 'spin 1s linear infinite' 
-                        }}></div>
-                        Pushing...
-                      </>
-                    ) : (
-                      <>
-                        <Send size={16} />
-                        Push to Marketplace
-                      </>
-                    )}
-                  </button>
-                )}
-
-                {task.pushedToMarketplace && (
-                  <div style={{
-                    padding: '12px',
-                    background: 'var(--success-light-bg)',
-                    color: 'var(--success)',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontWeight: '500',
+                    color: 'var(--primary)',
+                    textDecoration: 'none',
+                    fontSize: '13px',
+                    wordBreak: 'break-all',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    textAlign: 'center'
-                  }}>
-                    <CheckCircle size={16} />
-                    Pushed to Marketplace
-                  </div>
-                )}
+                    gap: '6px'
+                  }}
+                >
+                  <ExternalLink size={14} />
+                  {task.inDesignLink}
+                </a>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Designer Deliverables Section */}
           {task.designerDeliveries && (task.designerDeliveries.files.length > 0 || task.designerDeliveries.links.length > 0) && (
@@ -930,6 +1311,135 @@ export default function AdminTaskReview() {
           )}
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmation && confirmationAction && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '32px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 'bold',
+                color: 'var(--text)',
+                marginBottom: '12px'
+              }}>
+                Confirm Action
+              </h3>
+              <p style={{
+                fontSize: '14px',
+                color: 'var(--text-light)',
+                lineHeight: '1.5'
+              }}>
+                {confirmationAction.message}
+              </p>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowConfirmation(false)}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'white',
+                  color: 'var(--text)',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  confirmationAction.onConfirm();
+                  setShowConfirmation(false);
+                }}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: confirmationAction.type === 'reject' ? 'var(--warning)' : 'var(--primary)',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {confirmationAction.type === 'approve' ? 'Approve' : 
+                 confirmationAction.type === 'reject' ? 'Request Info' : 
+                 confirmationAction.type === 'update' ? 'Mark as Delivered' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {successMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: 'var(--success)',
+          color: 'white',
+          padding: '16px 20px',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: '500',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <CheckCircle size={16} />
+          {successMessage}
+        </div>
+      )}
+
+      {/* Error Message */}
+      {errorMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: 'var(--error)',
+          color: 'white',
+          padding: '16px 20px',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: '500',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <X size={16} />
+          {errorMessage}
+        </div>
+      )}
     </div>
     </RoleGuard>
   );

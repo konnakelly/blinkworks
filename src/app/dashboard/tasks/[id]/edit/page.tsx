@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Upload, X, CheckCircle, Sparkles, FileText, Settings, Eye, File, Image, Video, Edit } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, X, CheckCircle, Sparkles, FileText, Settings, Eye, File, Image, Video, Edit, MessageSquare } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { getTaskById, updateTask, CreativeRequirements } from "@/lib/firestore";
+import { getTaskById, updateTask, CreativeRequirements, resubmitTaskAfterFeedback } from "@/lib/firestore";
 
 export default function EditTaskPage() {
   const { user, loading: authLoading } = useAuthContext();
@@ -232,6 +232,11 @@ export default function EditTaskPage() {
       // Update task
       await updateTask(task.id, taskData);
 
+      // If task was in INFO_REQUESTED status, resubmit it
+      if (task.status === 'INFO_REQUESTED') {
+        await resubmitTaskAfterFeedback(task.id);
+      }
+
       router.push(`/dashboard/tasks/${task.id}`);
     } catch (error: any) {
       console.error("Task update error:", error);
@@ -332,11 +337,20 @@ export default function EditTaskPage() {
             Edit Task
           </h1>
           <p style={{ fontSize: '18px', color: 'var(--text-light)', margin: 0 }}>
-            Update your task details and requirements
+            {task && task.status === 'INFO_REQUESTED' && task.adminFeedback 
+              ? 'Please review the admin feedback below and update your task accordingly. You must resubmit to progress.'
+              : 'Update your task details and requirements'
+            }
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="card" style={{ padding: '32px' }}>
+        <form onSubmit={handleSubmit} className="card" style={{ 
+          padding: '32px',
+          ...(task && task.status === 'INFO_REQUESTED' && task.adminFeedback ? {
+            border: '2px solid var(--warning)',
+            background: 'var(--warning-light-bg)'
+          } : {})
+        }}>
           {error && (
             <div style={{ 
               background: 'var(--error-light-bg)', 
@@ -351,6 +365,59 @@ export default function EditTaskPage() {
             }}>
               <X size={20} />
               {error}
+            </div>
+          )}
+
+          {/* Admin Feedback Display - show when editing INFO_REQUESTED tasks */}
+          {task && task.status === 'INFO_REQUESTED' && task.adminFeedback && (
+            <div style={{
+              background: 'var(--warning-light-bg)',
+              border: '2px solid var(--warning)',
+              borderRadius: '12px',
+              padding: '20px',
+              marginBottom: '24px',
+              position: 'relative'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <MessageSquare size={20} color="var(--warning)" />
+                <h3 style={{ 
+                  fontSize: '16px', 
+                  fontWeight: 'bold', 
+                  color: 'var(--warning)', 
+                  margin: 0 
+                }}>
+                  Admin Feedback - Please Address These Points
+                </h3>
+              </div>
+              <p style={{ 
+                fontSize: '14px', 
+                color: 'var(--text)', 
+                margin: 0,
+                lineHeight: '1.5',
+                background: 'var(--background)',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border)'
+              }}>
+                {task.adminFeedback}
+              </p>
+              
+              {/* Resubmission Notice */}
+              <div style={{
+                background: 'var(--warning)',
+                color: 'white',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                marginTop: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '13px',
+                fontWeight: '600'
+              }}>
+                <Edit size={16} />
+                <span>After making changes below, click "Update Task" to resubmit for review</span>
+              </div>
             </div>
           )}
 

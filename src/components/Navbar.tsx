@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Sparkles, User, LogOut, Settings, Layout, Palette, Shield, ChevronDown } from "lucide-react";
+import { ArrowRight, Sparkles, User, LogOut, Settings, Layout, Palette, Shield, ChevronDown, Folder, Image, Users, BarChart3 } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useRoleAccess } from "@/hooks/useRoleAccess";
 
@@ -63,6 +63,8 @@ export default function Navbar({ variant = 'home' }: NavbarProps) {
     if (userRole.role === 'ADMIN') {
       return [
         { href: '/admin', label: 'Admin Panel', icon: Shield },
+        { href: '/admin/users', label: 'Users', icon: Users },
+        { href: '/admin/workload', label: 'Workload', icon: BarChart3 },
         { href: '/admin/tasks/new', label: 'Create Task', icon: Layout },
         { href: '/designer', label: 'Designer View', icon: Palette }
       ];
@@ -70,6 +72,12 @@ export default function Navbar({ variant = 'home' }: NavbarProps) {
       return [
         ...baseLinks,
         { href: '/designer', label: 'Marketplace', icon: Palette }
+      ];
+    } else if (userRole.role === 'CLIENT') {
+      return [
+        ...baseLinks,
+        { href: '/dashboard/creatives', label: 'My Creatives', icon: Image },
+        { href: '/dashboard/brand-assets', label: 'Brand Assets', icon: Folder }
       ];
     }
     

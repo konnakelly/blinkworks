@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { PlusCircle, Clock, AlertCircle, CheckCircle, BarChart3, Users, Zap, Sparkles } from "lucide-react";
+import { PlusCircle, Clock, AlertCircle, CheckCircle, BarChart3, Users, Zap, Sparkles, Download, ExternalLink, Image, File, Video, Palette } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { getTasksByUserId, createBrand, getBrandByUserId, Task } from "@/lib/firestore";
 import Navbar from "@/components/Navbar";
@@ -47,6 +47,11 @@ export default function DashboardPage() {
 
     fetchTasks();
   }, [user, userProfile]);
+
+  // Early return to prevent rendering when user is not authenticated
+  if (!authLoading && !user) {
+    return null;
+  }
 
   if (authLoading) {
     return (
@@ -327,6 +332,246 @@ export default function DashboardPage() {
             </div>
             <div style={{ color: 'var(--text-light)', fontSize: '16px', fontWeight: '500' }}>In Progress</div>
           </div>
+          
+          <div className="card" style={{ textAlign: 'center', padding: '24px' }}>
+            <div style={{ 
+              width: '56px', 
+              height: '56px', 
+              background: 'var(--accent-light-bg)', 
+              borderRadius: '16px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              margin: '0 auto 20px' 
+            }}>
+              <AlertCircle size={28} color="var(--accent-color)" />
+            </div>
+            <div style={{ fontSize: '36px', fontWeight: 'bold', color: 'var(--text)', marginBottom: '8px' }}>
+              {tasks.filter(task => ['IN_REVIEW', 'READY_FOR_REVIEW', 'INFO_REQUESTED'].includes(task.status)).length}
+            </div>
+            <div style={{ color: 'var(--text-light)', fontSize: '16px', fontWeight: '500' }}>Action Required</div>
+          </div>
+        </div>
+
+        {/* My Creatives Section - Compact */}
+        <div className="card" style={{ padding: '24px', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text)', margin: 0 }}>
+              My Creatives
+            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ 
+                fontSize: '12px', 
+                color: 'var(--text-light)', 
+                background: 'var(--surface)', 
+                padding: '4px 8px', 
+                borderRadius: '4px',
+                border: '1px solid var(--border)'
+              }}>
+                {tasks.filter(task => task.status.toLowerCase() === 'completed' && task.designerDeliveries).length} completed
+              </div>
+              <Link 
+                href="/dashboard/creatives" 
+                style={{ 
+                  fontSize: '12px', 
+                  color: 'var(--primary)', 
+                  textDecoration: 'none',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                View All <ExternalLink size={12} />
+              </Link>
+            </div>
+          </div>
+
+          {(() => {
+            const completedTasks = tasks.filter(task => 
+              task.status.toLowerCase() === 'completed' && 
+              task.designerDeliveries && 
+              (task.designerDeliveries.files.length > 0 || task.designerDeliveries.links.length > 0)
+            ).slice(0, 3); // Show only first 3
+
+            if (completedTasks.length === 0) {
+              return (
+                <div style={{ textAlign: 'center', padding: '32px' }}>
+                  <div style={{ 
+                    width: '48px', 
+                    height: '48px', 
+                    background: 'var(--surface)', 
+                    borderRadius: '12px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    margin: '0 auto 16px' 
+                  }}>
+                    <Sparkles size={24} color="var(--text-light)" />
+                  </div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                    No completed designs yet
+                  </h3>
+                  <p style={{ color: 'var(--text-light)', margin: 0, fontSize: '14px' }}>
+                    Your approved designs will appear here
+                  </p>
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {completedTasks.map((task) => (
+                  <div key={task.id} style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    padding: '12px 16px',
+                    background: 'var(--surface)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--primary)';
+                    e.currentTarget.style.background = 'var(--primary-light-bg)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border)';
+                    e.currentTarget.style.background = 'var(--surface)';
+                  }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px', 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        background: 'var(--primary-light-bg)', 
+                        color: 'var(--primary)',
+                        fontSize: '11px',
+                        fontWeight: '500'
+                      }}>
+                        {(() => {
+                          switch (task.type) {
+                            case 'STATIC_DESIGN': return <Image size={10} />;
+                            case 'VIDEO_PRODUCTION': return <Video size={10} />;
+                            case 'ANIMATION': return <Sparkles size={10} />;
+                            case 'ILLUSTRATION': return <Palette size={10} />;
+                            case 'BRANDING': return <Palette size={10} />;
+                            case 'WEB_DESIGN': return <File size={10} />;
+                            default: return <File size={10} />;
+                          }
+                        })()}
+                        {formatTaskType(task.type)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h3 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text)', margin: 0, marginBottom: '2px' }}>
+                          {task.title}
+                        </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--text-light)' }}>
+                          <span>
+                            {task.designerDeliveries?.files && task.designerDeliveries.files.length > 0 && `${task.designerDeliveries.files.length} file${task.designerDeliveries.files.length > 1 ? 's' : ''}`}
+                            {task.designerDeliveries?.files && task.designerDeliveries.files.length > 0 && task.designerDeliveries?.links && task.designerDeliveries.links.length > 0 && ' • '}
+                            {task.designerDeliveries?.links && task.designerDeliveries.links.length > 0 && `${task.designerDeliveries.links.length} link${task.designerDeliveries.links.length > 1 ? 's' : ''}`}
+                          </span>
+                          <span>•</span>
+                          <span>Completed {formatDate(task.reviewedAt || task.updatedAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {/* Delivery Link */}
+                      {task.designerDeliveries?.links && task.designerDeliveries.links.length > 0 && (
+                        <a
+                          href={(() => {
+                            const url = task.designerDeliveries.links[0].url;
+                            if (!url) return '#';
+                            if (url.startsWith('http://') || url.startsWith('https://')) {
+                              return url;
+                            }
+                            return `https://${url}`;
+                          })()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ 
+                            fontSize: '11px', 
+                            color: 'var(--primary)', 
+                            textDecoration: 'none',
+                            fontWeight: '500',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            background: 'var(--background)',
+                            border: '1px solid var(--border)',
+                            transition: 'all 0.2s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'var(--primary-light-bg)';
+                            e.currentTarget.style.borderColor = 'var(--primary)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'var(--background)';
+                            e.currentTarget.style.borderColor = 'var(--border)';
+                          }}
+                        >
+                          <ExternalLink size={10} />
+                          Link
+                        </a>
+                      )}
+                      
+                      {/* View Details Link */}
+                      <Link 
+                        href={`/dashboard/tasks/${task.id}`} 
+                        style={{ 
+                          fontSize: '11px', 
+                          color: 'var(--primary)', 
+                          textDecoration: 'none',
+                          fontWeight: '500',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          background: 'var(--background)',
+                          border: '1px solid var(--border)',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'var(--primary-light-bg)';
+                          e.currentTarget.style.borderColor = 'var(--primary)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'var(--background)';
+                          e.currentTarget.style.borderColor = 'var(--border)';
+                        }}
+                      >
+                        View
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+                {tasks.filter(task => task.status.toLowerCase() === 'completed' && task.designerDeliveries).length > 3 && (
+                  <div style={{ textAlign: 'center', padding: '12px' }}>
+                    <Link 
+                      href="/dashboard/creatives" 
+                      style={{ 
+                        fontSize: '12px', 
+                        color: 'var(--primary)', 
+                        textDecoration: 'none',
+                        fontWeight: '500',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      View all {tasks.filter(task => task.status.toLowerCase() === 'completed' && task.designerDeliveries).length} creatives <ExternalLink size={12} />
+                    </Link>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Tasks Section */}

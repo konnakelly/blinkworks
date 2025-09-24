@@ -42,7 +42,6 @@ export default function DesignerTaskDetail() {
   const [isClaiming, setIsClaiming] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [designerNotes, setDesignerNotes] = useState("");
-  const [newStatus, setNewStatus] = useState("");
   
   // Delivery state
   const [deliveryNotes, setDeliveryNotes] = useState("");
@@ -51,6 +50,35 @@ export default function DesignerTaskDetail() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
+  
+  // In Design Link state
+  const [inDesignLink, setInDesignLink] = useState("");
+  const [isUpdatingInDesignLink, setIsUpdatingInDesignLink] = useState(false);
+  
+  // Confirmation and messaging state
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmationAction, setConfirmationAction] = useState<{
+    type: 'claim' | 'submit' | 'update' | 'upload' | 'remove';
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const showConfirmationModal = (type: 'claim' | 'submit' | 'update' | 'upload' | 'remove', message: string, onConfirm: () => void) => {
+    setConfirmationAction({ type, message, onConfirm });
+    setShowConfirmation(true);
+  };
+
+  const showSuccessMessage = (message: string) => {
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(""), 5000);
+  };
+
+  const showErrorMessage = (message: string) => {
+    setErrorMessage(message);
+    setTimeout(() => setErrorMessage(""), 5000);
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -66,7 +94,7 @@ export default function DesignerTaskDetail() {
           if (fetchedTask) {
             setTask(fetchedTask);
             setDesignerNotes(fetchedTask.designerNotes || "");
-            setNewStatus(fetchedTask.status);
+            setInDesignLink(fetchedTask.inDesignLink || "");
           } else {
             setError("Task not found.");
           }
@@ -93,36 +121,34 @@ export default function DesignerTaskDetail() {
         status: 'IN_PROGRESS',
         assignedDesigner: user.uid
       } : null);
-      alert("Task claimed successfully! You can now start working on it.");
+      showSuccessMessage("Task claimed successfully! You can now start working on it.");
     } catch (error) {
       console.error("Error claiming task:", error);
-      alert("Failed to claim task. Please try again.");
+      showErrorMessage("Failed to claim task. Please try again.");
     } finally {
       setIsClaiming(false);
     }
   };
 
-  const handleStatusUpdate = async () => {
+  const handleNotesUpdate = async () => {
     if (!task) return;
     
     setIsUpdating(true);
     try {
       await updateTask(task.id, {
-        status: newStatus,
         designerNotes: designerNotes,
         updatedAt: new Date()
       });
       
       setTask(prev => prev ? {
         ...prev,
-        status: newStatus as Task['status'],
         designerNotes: designerNotes
       } : null);
       
-      alert("Task updated successfully!");
+      showSuccessMessage("Notes updated successfully!");
     } catch (error) {
-      console.error("Error updating task:", error);
-      alert("Failed to update task. Please try again.");
+      console.error("Error updating notes:", error);
+      showErrorMessage("Failed to update notes. Please try again.");
     } finally {
       setIsUpdating(false);
     }
@@ -155,10 +181,10 @@ export default function DesignerTaskDetail() {
         setTask(updatedTask);
       }
       
-      alert("Files uploaded successfully!");
+      showSuccessMessage("Files uploaded successfully!");
     } catch (error) {
       console.error("Error uploading files:", error);
-      alert("Failed to upload files. Please try again.");
+      showErrorMessage("Failed to upload files. Please try again.");
     } finally {
       setIsUploading(false);
     }
@@ -184,10 +210,10 @@ export default function DesignerTaskDetail() {
         setTask(updatedTask);
       }
       
-      alert("Link added successfully!");
+      showSuccessMessage("Link added successfully!");
     } catch (error) {
       console.error("Error adding link:", error);
-      alert("Failed to add link. Please try again.");
+      showErrorMessage("Failed to add link. Please try again.");
     }
   };
 
@@ -203,10 +229,10 @@ export default function DesignerTaskDetail() {
         setTask(updatedTask);
       }
       
-      alert("Delivery removed successfully!");
+      showSuccessMessage("Delivery removed successfully!");
     } catch (error) {
       console.error("Error removing delivery:", error);
-      alert("Failed to remove delivery. Please try again.");
+      showErrorMessage("Failed to remove delivery. Please try again.");
     }
   };
 
@@ -234,12 +260,55 @@ export default function DesignerTaskDetail() {
         }
       } : null);
       
-      alert("Delivery submitted successfully! The client will be notified for review.");
+      showSuccessMessage("Delivery submitted successfully! The client will be notified for review.");
     } catch (error) {
       console.error("Error submitting delivery:", error);
-      alert("Failed to submit delivery. Please try again.");
+      showErrorMessage("Failed to submit delivery. Please try again.");
     } finally {
       setIsSubmittingDelivery(false);
+    }
+  };
+
+  const formatUrl = (url: string) => {
+    if (!url) return '';
+    const trimmed = url.trim();
+    if (trimmed && !trimmed.match(/^https?:\/\//)) {
+      return `https://${trimmed}`;
+    }
+    return trimmed;
+  };
+
+  const handleUpdateInDesignLink = async () => {
+    if (!task || !user) return;
+    
+    // Validate and format URL
+    const validatedUrl = formatUrl(inDesignLink);
+    
+    if (!validatedUrl) {
+      showErrorMessage("Please enter a valid URL");
+      return;
+    }
+    
+    setIsUpdatingInDesignLink(true);
+    try {
+      await updateTask(task.id, {
+        inDesignLink: validatedUrl,
+        updatedAt: new Date()
+      });
+      
+      setTask(prev => prev ? {
+        ...prev,
+        inDesignLink: validatedUrl,
+        updatedAt: new Date()
+      } : null);
+      
+      setInDesignLink(validatedUrl);
+      showSuccessMessage("In Design link updated successfully!");
+    } catch (error) {
+      console.error("Error updating in design link:", error);
+      showErrorMessage("Failed to update in design link. Please try again.");
+    } finally {
+      setIsUpdatingInDesignLink(false);
     }
   };
 
@@ -414,7 +483,13 @@ export default function DesignerTaskDetail() {
               
               {canClaim && (
                 <button
-                  onClick={handleClaimTask}
+                  onClick={() => {
+                    showConfirmationModal(
+                      'claim',
+                      'Are you sure you want to claim this task? You will be assigned as the designer and can start working on it.',
+                      handleClaimTask
+                    );
+                  }}
                   disabled={isClaiming}
                   className="btn-primary"
                   style={{ 
@@ -674,29 +749,6 @@ export default function DesignerTaskDetail() {
               </h3>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {/* Status Update */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
-                    Update Status
-                  </label>
-                  <select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface)',
-                      color: 'var(--text)',
-                      fontSize: '14px'
-                    }}
-                  >
-                    <option value="IN_PROGRESS">In Progress</option>
-                    <option value="READY_FOR_REVIEW">Ready for Review</option>
-                    <option value="COMPLETED">Completed</option>
-                  </select>
-                </div>
 
                 {/* Designer Notes */}
                 <div>
@@ -721,10 +773,112 @@ export default function DesignerTaskDetail() {
                   />
                 </div>
 
+                {/* In Design Link */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                    In Design Link
+                    <span style={{ fontSize: '12px', color: 'var(--text-light)', fontWeight: '400', marginLeft: '8px' }}>
+                      (visible to you and admins only)
+                    </span>
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <input
+                      type="url"
+                      value={inDesignLink}
+                      onChange={(e) => setInDesignLink(e.target.value)}
+                      placeholder="figma.com/file/..."
+                      style={{
+                        flex: 1,
+                        padding: '12px',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        outline: 'none',
+                        transition: 'border-color 0.2s ease'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                      onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+                    />
+                    <button
+                      onClick={handleUpdateInDesignLink}
+                      disabled={isUpdatingInDesignLink}
+                      style={{
+                        padding: '12px 16px',
+                        background: 'var(--primary)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: isUpdatingInDesignLink ? 'not-allowed' : 'pointer',
+                        opacity: isUpdatingInDesignLink ? 0.6 : 1,
+                        transition: 'opacity 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {isUpdatingInDesignLink ? (
+                        <>
+                          <div style={{
+                            width: '14px',
+                            height: '14px',
+                            border: '2px solid white',
+                            borderTop: '2px solid transparent',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite'
+                          }} />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={14} />
+                          Update
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  
+                  {task.inDesignLink && (
+                    <div style={{
+                      marginTop: '8px',
+                      padding: '8px 12px',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      fontSize: '12px'
+                    }}>
+                      <div style={{ color: 'var(--text-light)', marginBottom: '4px' }}>
+                        Current link:
+                      </div>
+                      <a
+                        href={task.inDesignLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: 'var(--primary)',
+                          textDecoration: 'none',
+                          fontSize: '12px',
+                          wordBreak: 'break-all',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <ExternalLink size={12} />
+                        {task.inDesignLink}
+                      </a>
+                    </div>
+                  )}
+                </div>
+
                 {/* Action Buttons */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <button
-                    onClick={handleStatusUpdate}
+                    onClick={handleNotesUpdate}
                     disabled={isUpdating}
                     className="btn-primary"
                     style={{
@@ -761,7 +915,7 @@ export default function DesignerTaskDetail() {
 
           {/* Designer Delivery Section */}
           {isMyTask && (
-            <div className="card" style={{ marginTop: '32px', padding: '32px' }}>
+            <div className="card" style={{ marginTop: '16px', padding: '32px' }}>
               <h3 style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--text)', marginBottom: '24px' }}>
                 Deliver Your Work
               </h3>
@@ -1031,7 +1185,13 @@ export default function DesignerTaskDetail() {
 
                   {/* Submit Delivery Button */}
                   <button
-                    onClick={handleSubmitDelivery}
+                    onClick={() => {
+                      showConfirmationModal(
+                        'submit',
+                        'Are you sure you want to submit this delivery? The client will be notified for review.',
+                        handleSubmitDelivery
+                      );
+                    }}
                     disabled={isSubmittingDelivery || (!task.designerDeliveries?.files?.length && !task.designerDeliveries?.links?.length)}
                     className="btn-primary"
                     style={{
@@ -1068,6 +1228,134 @@ export default function DesignerTaskDetail() {
           )}
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmation && confirmationAction && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '32px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 'bold',
+                color: 'var(--text)',
+                marginBottom: '12px'
+              }}>
+                Confirm Action
+              </h3>
+              <p style={{
+                fontSize: '14px',
+                color: 'var(--text-light)',
+                lineHeight: '1.5'
+              }}>
+                {confirmationAction.message}
+              </p>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowConfirmation(false)}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'white',
+                  color: 'var(--text)',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  confirmationAction.onConfirm();
+                  setShowConfirmation(false);
+                }}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'var(--primary)',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {confirmationAction.type === 'claim' ? 'Claim Task' : 
+                 confirmationAction.type === 'submit' ? 'Submit Delivery' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {successMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: 'var(--success)',
+          color: 'white',
+          padding: '16px 20px',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: '500',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <CheckCircle size={16} />
+          {successMessage}
+        </div>
+      )}
+
+      {/* Error Message */}
+      {errorMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: 'var(--error)',
+          color: 'white',
+          padding: '16px 20px',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: '500',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <X size={16} />
+          {errorMessage}
+        </div>
+      )}
     </div>
     </RoleGuard>
   );

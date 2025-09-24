@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Upload, X, CheckCircle, Sparkles, FileText, Settings, Eye, File, Image, Video } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, X, CheckCircle, Sparkles, FileText, Settings, Eye, File, Image, Video, Palette, BookOpen } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { createTask, getBrandByUserId, CreativeRequirements, uploadFile } from "@/lib/firestore";
+import { createTask, getBrandByUserId, CreativeRequirements, uploadFile, getBrandAssets, BrandAssets } from "@/lib/firestore";
 import { db } from "@/lib/firebase";
 
 export default function NewTask() {
@@ -37,12 +37,30 @@ export default function NewTask() {
   const [referenceUrl, setReferenceUrl] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [brandAssets, setBrandAssets] = useState<BrandAssets | null>(null);
+  const [selectedBrandAssets, setSelectedBrandAssets] = useState<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/auth/signin");
     }
   }, [user, authLoading, router]);
+
+  // Fetch brand assets when user is available
+  useEffect(() => {
+    const fetchBrandAssets = async () => {
+      if (user?.id) {
+        try {
+          const assets = await getBrandAssets(user.id);
+          setBrandAssets(assets);
+        } catch (error) {
+          console.error('Error fetching brand assets:', error);
+        }
+      }
+    };
+    
+    fetchBrandAssets();
+  }, [user?.id]);
 
   // Force black text on all form elements and review content
   useEffect(() => {
@@ -251,6 +269,24 @@ export default function NewTask() {
             };
 
             // Update the task with file data
+            const { updateDoc } = await import('firebase/firestore');
+            const { doc } = await import('firebase/firestore');
+            await updateDoc(doc(db, 'tasks', taskId), {
+              requirements: updatedRequirements
+            });
+          }
+
+          // Add selected brand assets to requirements
+          if (selectedBrandAssets.length > 0 && brandAssets) {
+            const selectedAssets = brandAssets.assets.filter(asset => 
+              selectedBrandAssets.includes(asset.id)
+            );
+            
+            const updatedRequirements = {
+              ...requirements,
+              selectedBrandAssets: selectedAssets
+            };
+
             const { updateDoc } = await import('firebase/firestore');
             const { doc } = await import('firebase/firestore');
             await updateDoc(doc(db, 'tasks', taskId), {
@@ -784,6 +820,68 @@ export default function NewTask() {
                         </div>
                       )}
                     </div>
+
+                    {/* Brand Assets Section */}
+                    {brandAssets && brandAssets.assets.length > 0 && (
+                      <div>
+                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '12px' }}>
+                          Select Brand Assets
+                        </label>
+                        <p style={{ fontSize: '12px', color: 'var(--text-light)', marginBottom: '16px', fontStyle: 'italic' }}>
+                          Choose from your uploaded brand assets to include with this task
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                          {brandAssets.assets.map((asset) => (
+                            <label key={asset.id} style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              padding: '12px 16px', 
+                              background: selectedBrandAssets.includes(asset.id) ? 'var(--primary-light-bg)' : 'var(--surface)', 
+                              borderRadius: '12px', 
+                              border: `2px solid ${selectedBrandAssets.includes(asset.id) ? 'var(--primary)' : 'var(--border)'}`,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedBrandAssets.includes(asset.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedBrandAssets(prev => [...prev, asset.id]);
+                                  } else {
+                                    setSelectedBrandAssets(prev => prev.filter(id => id !== asset.id));
+                                  }
+                                }}
+                                style={{ 
+                                  width: '18px', 
+                                  height: '18px', 
+                                  accentColor: 'var(--primary)',
+                                  marginRight: '12px'
+                                }}
+                              />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ 
+                                  fontSize: '14px', 
+                                  fontWeight: '500',
+                                  color: 'var(--text)',
+                                  marginBottom: '2px',
+                                  wordBreak: 'break-all'
+                                }}>
+                                  {asset.name}
+                                </div>
+                                <div style={{ 
+                                  fontSize: '12px', 
+                                  color: 'var(--text-light)',
+                                  textTransform: 'capitalize'
+                                }}>
+                                  {asset.type.replace('_', ' ')}
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1096,6 +1194,53 @@ export default function NewTask() {
                               >
                                 {ref}
                               </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {selectedBrandAssets.length > 0 && brandAssets && (
+                      <div>
+                        <strong style={{ fontSize: '14px', color: 'var(--text)' }}>Selected Brand Assets:</strong>
+                        <ul style={{ margin: '8px 0 0 0', padding: 0, listStyle: 'none' }}>
+                          {brandAssets.assets
+                            .filter(asset => selectedBrandAssets.includes(asset.id))
+                            .map((asset) => (
+                            <li key={asset.id} style={{ 
+                              marginBottom: '8px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px 12px',
+                              background: 'var(--surface)',
+                              borderRadius: '8px',
+                              border: '1px solid var(--border)'
+                            }}>
+                              <div style={{ color: 'var(--primary)' }}>
+                                {asset.type === 'LOGO' && <Image size={16} />}
+                                {asset.type === 'FONT' && <FileText size={16} />}
+                                {asset.type === 'COLOR_PALETTE' && <Palette size={16} />}
+                                {asset.type === 'GUIDELINES' && <BookOpen size={16} />}
+                                {asset.type === 'IMAGE' && <Image size={16} />}
+                                {asset.type === 'OTHER' && <File size={16} />}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ 
+                                  fontSize: '14px', 
+                                  fontWeight: '500',
+                                  color: 'var(--text)',
+                                  wordBreak: 'break-all'
+                                }}>
+                                  {asset.name}
+                                </div>
+                                <div style={{ 
+                                  fontSize: '12px', 
+                                  color: 'var(--text-light)',
+                                  textTransform: 'capitalize'
+                                }}>
+                                  {asset.type.replace('_', ' ')}
+                                </div>
+                              </div>
                             </li>
                           ))}
                         </ul>

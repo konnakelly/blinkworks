@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Calendar, Clock, AlertCircle, CheckCircle, Sparkles, FileText, Settings, Eye, Image, Video, File, X, Edit, Trash2 } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, AlertCircle, CheckCircle, Sparkles, FileText, Settings, Eye, Image, Video, File, X, Edit, Trash2, MessageSquare } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { getTaskById, Task, deleteTask, reviewDesignerDelivery } from "@/lib/firestore";
 
@@ -202,6 +202,8 @@ export default function TaskDetailPage() {
         return <Clock size={20} color="var(--warning)" />;
       case 'pending':
         return <AlertCircle size={20} color="var(--accent-color)" />;
+      case 'info_requested':
+        return <MessageSquare size={20} color="var(--warning)" />;
       default:
         return <Clock size={20} color="var(--text-light)" />;
     }
@@ -215,6 +217,8 @@ export default function TaskDetailPage() {
         return 'var(--warning)';
       case 'pending':
         return 'var(--accent-color)';
+      case 'info_requested':
+        return 'var(--warning)';
       default:
         return 'var(--text-light)';
     }
@@ -442,11 +446,93 @@ export default function TaskDetailPage() {
               if (task.status === 'IN_REVIEW') return 'Our team is reviewing your requirements';
               if (task.status === 'IN_PROGRESS') return 'Our creative team is working on your project';
               if (task.status === 'READY_FOR_REVIEW') return 'Your task is ready for your review';
+              if (task.status === 'INFO_REQUESTED') return 'Request for further information - Please edit and resubmit your task';
               if (task.status === 'COMPLETED') return 'Your task has been completed';
               return 'Task in progress';
             })()}
           </div>
         </div>
+
+        {/* Admin Feedback Section - show current feedback for INFO_REQUESTED status */}
+        {task.status === 'INFO_REQUESTED' && task.adminFeedback && (
+          <div style={{
+            background: 'var(--warning-light-bg)',
+            border: '2px solid var(--warning)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px',
+            position: 'relative'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <MessageSquare size={20} color="var(--warning)" />
+              <h3 style={{ 
+                fontSize: '18px', 
+                fontWeight: 'bold', 
+                color: 'var(--warning)', 
+                margin: 0 
+              }}>
+                Request for Further Information
+              </h3>
+            </div>
+            <p style={{ 
+              fontSize: '15px', 
+              color: 'var(--text)', 
+              margin: 0,
+              lineHeight: '1.5',
+              background: 'var(--background)',
+              padding: '16px',
+              borderRadius: '8px',
+              border: '1px solid var(--border)'
+            }}>
+              {task.adminFeedback}
+            </p>
+            
+            {/* Action Required Notice */}
+            <div style={{
+              background: 'var(--background)',
+              border: '1px solid var(--warning)',
+              borderRadius: '8px',
+              padding: '16px',
+              marginTop: '16px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px'
+            }}>
+              <div style={{
+                background: 'var(--warning)',
+                borderRadius: '50%',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                marginTop: '2px'
+              }}>
+                <Edit size={14} color="white" />
+              </div>
+              <div>
+                <h4 style={{ 
+                  fontSize: '14px', 
+                  fontWeight: 'bold', 
+                  color: 'var(--warning)', 
+                  margin: '0 0 8px 0' 
+                }}>
+                  Action Required
+                </h4>
+                <p style={{ 
+                  fontSize: '13px', 
+                  color: 'var(--text)', 
+                  margin: 0,
+                  lineHeight: '1.4'
+                }}>
+                  Please edit your task using the button below to address the feedback above and resubmit for review. 
+                  Your task will not progress until you make the requested changes and resubmit.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Task Header */}
         <div className="card" style={{ marginBottom: '32px', padding: '32px' }}>
@@ -459,6 +545,8 @@ export default function TaskDetailPage() {
                 {task.description}
               </p>
             </div>
+            
+            
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ 
                 display: 'flex', 
@@ -475,8 +563,8 @@ export default function TaskDetailPage() {
                 {task.status}
               </div>
               
-              {/* Edit and Delete buttons - only show for SUBMITTED tasks */}
-              {task.status === 'SUBMITTED' && (
+              {/* Edit and Delete buttons - show for SUBMITTED and INFO_REQUESTED tasks */}
+              {(task.status === 'SUBMITTED' || task.status === 'INFO_REQUESTED') && (
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={handleEditTask}
